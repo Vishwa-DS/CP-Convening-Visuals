@@ -1,0 +1,404 @@
+---
+title: "ConveningVis"
+format: html
+editor: visual
+---
+
+```{r}
+library(tidyverse)
+library(sf)
+library(maps)
+library(viridis)
+library(tigris)
+library(zoo)
+```
+
+
+```{r}
+cpdata <- read.csv("MyPromise_Data.csv")
+```
+
+
+```{r}
+compare_sems <- function(state) {
+  cpdata %>% 
+    filter(State==state) %>% 
+    rename(sems_covered = Semesters_or_Credits_Covered) %>% 
+    filter(sems_covered!= "Not specified") %>% 
+    mutate(sems_covered = as.numeric(gsub("\\D", "", sems_covered))) %>% 
+    ggplot(aes(x = sems_covered, y = Program_Name)) +  
+    geom_col(fill = "lightblue") +  
+    xlab("Semesters Covered by Program") +  
+    ylab("Promise Program") +
+    theme_bw() +
+    theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))
+}
+
+compare_sems("Arizona")
+```
+
+
+```{r}
+numprograms <- function(state) {
+  cpdata %>% 
+    filter(State==state) -> stateprograms
+  numstate <- nrow(stateprograms)
+
+  return(numstate)
+}
+
+numprograms("Arizona")
+```
+
+
+```{r}
+numbyyear <- function(state) {
+  cpdata %>% 
+    filter(State==state) %>% 
+    group_by(Year_Started) %>% 
+    summarize(n = n()) -> yearsadd
+
+  for (row in 2:nrow(yearsadd)) {
+    yearsadd[row, "n"] <- yearsadd[row, "n"] + yearsadd[row-1, "n"]
+  } 
+  
+  ggplot(data=yearsadd, aes(x=Year_Started, y=n, group=1)) +
+    geom_line() +
+    scale_y_continuous(breaks = seq(0, 10, 2)) +
+    theme_bw() +
+    ggtitle("Growth of Promise Programs Over the Years") +
+    xlab("Year") +
+    ylab("Number of Programs") +
+    theme(panel.border = element_blank(), panel.grid.major = element_line(color = "lightgray", linetype = "dashed"), panel.grid.minor = element_line(color = "lightgray", linetype = "dotted"), axis.line = element_line(colour = "gray"))
+}
+
+numbyyear("Arizona")
+```
+
+
+```{r}
+lastfirstdollar <- function(state) {
+  
+  cpdata %>% 
+    filter(State==state) -> stateprograms
+  numstate <- nrow(stateprograms)
+  
+  cpdata %>% 
+    filter(State==state) %>% 
+    group_by(Last_Dollar_First_Dollar) %>% 
+    summarize(count = n()) %>% 
+    ggplot(aes(x=Last_Dollar_First_Dollar, y=count)) +
+    geom_bar(stat="identity", fill="lightblue") +
+    ylab("Count of Financial Aid Type") +
+    xlab("Type of Financial Aid") +
+    ggtitle("Types of Financial Aid Available") +
+    theme_bw() +
+    scale_y_continuous(limits = c(0, numstate), breaks = seq(0, numstate, by = 2)) +
+    theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))
+}
+
+lastfirstdollar("Arizona")
+```
+
+
+```{r}
+IHEsector <- function(state) {
+  cpdata %>% 
+    filter(State==state) %>% 
+    group_by(IHE_Degree_Supported) %>% 
+    summarize(count = n()) %>% 
+    ggplot(aes(x=IHE_Degree_Supported, y=count)) +
+    geom_bar(stat="identity", fill="salmon") +
+    ylab("Number of Programs Offering Each Type of Degree") +
+    xlab("Type of Degree Awarded to Eligible Promise Students") +
+    ggtitle("Distribution of IHE Degrees That Have Promise Programs") +
+    theme_bw() +
+    scale_x_discrete(limits=c("Certificate or Associate Only","Associates","Bachelor Only", "Any")) +
+    ylim(0, 5) +
+    theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))
+}
+
+IHEsector("Arizona")
+```
+
+
+```{r}
+deadlines <- function(state) {
+  cpdata %>% 
+    filter(State==state) %>% 
+    filter(Deadline_for_Application != "Not Specified") %>% 
+    filter(Deadline_for_Application != "Not specified") %>% 
+    mutate(Deadline_for_Application = as.Date(paste(Deadline_for_Application), format = "%B %d")) %>% 
+    ggplot(aes(y=Program_Name, x=Deadline_for_Application)) +
+    scale_x_date(date_labels = "%b %d", breaks = "1 month") +
+    geom_point(shape=8) +
+    theme_bw() 
+}
+
+deadlines("Arizona")
+```
+
+
+The following code creates a line graph comparing growth of promise programs within the given state, its surrounding region, and the country:
+
+```{r}
+percentchangestate <- function(state) {
+  cpdata %>% 
+    filter(State==state) %>% 
+    group_by(Year_Started) %>% 
+    summarize(staten = n()) -> yearsaddchange
+
+  for (row in 2:nrow(yearsaddchange)) {
+    yearsaddchange[row, "staten"] <- yearsaddchange[row, "staten"] + yearsaddchange[row-1, "staten"]
+  } 
+  
+  cpdata %>% 
+    filter(State==state) -> stateprograms
+  numstate <- nrow(stateprograms)
+  
+  yearsaddchange %>% 
+    mutate(percentchange_state = 0) -> yearsaddchange
+  
+  for (row in 1:nrow(yearsaddchange)) {
+    yearsaddchange[row, "percentchange_state"] <- yearsaddchange[row, "staten"] / numstate
+  }
+  
+  return(yearsaddchange)
+}
+
+yearsaddstate <- percentchangestate("Arizona")
+yearsaddstate
+```
+
+
+```{r}
+cpdata %>% 
+    group_by(Year_Started) %>% 
+    summarize(natn = n()) -> yearsaddnat
+
+  for (row in 2:nrow(yearsaddnat)) {
+    yearsaddnat[row, "natn"] <- yearsaddnat[row, "natn"] + yearsaddnat[row-1, "natn"]
+  } 
+  
+  yearsaddnat %>% 
+    mutate(percentchange_nat = 0) -> yearsaddnat
+  
+  for (row in 1:nrow(yearsaddnat)) {
+    yearsaddnat[row, "percentchange_nat"] <- yearsaddnat[row, "natn"] / nrow(cpdata)
+  }
+  
+  yearsaddnat$percentchange_nat <- round(yearsaddnat$percentchange_nat, digits=3)
+  
+yearsaddnat
+```
+
+
+```{r}
+percentchangeregion <- function(state1, state2, state3, state4, state5, state6) {
+  cpdata %>% 
+    filter(State==state1 | State==state2 | State==state3 | State==state4 |
+            State==state5 | State==state6) %>% 
+    group_by(Year_Started) %>% 
+    summarize(regionn = n()) -> yearsaddregion
+  
+    for (row in 2:nrow(yearsaddregion)) {
+      yearsaddregion[row, "regionn"] <- yearsaddregion[row, "regionn"] + yearsaddregion[row-1, "regionn"]
+    } 
+  
+  cpdata %>% 
+    filter(State==state1 | State==state2 | State==state3 | State==state4 |
+            State==state5 | State==state6) -> regionprograms
+  numregion <- nrow(regionprograms)
+    
+    yearsaddregion %>% 
+      mutate(percentchange_region = 0) -> yearsaddregion
+    
+    for (row in 1:nrow(yearsaddregion)) {
+      yearsaddregion[row, "percentchange_region"] <- yearsaddregion[row, "regionn"] / numregion
+    }
+    
+    yearsaddregion$percentchange_region <- round(yearsaddregion$percentchange_region, digits=3)
+    
+    return(yearsaddregion)
+}
+  
+yearsaddbyregion <- percentchangeregion("Arizona", "California", "Utah", "Colorado", "New Mexico", "Texas")
+yearsaddbyregion
+```
+
+
+```{r}
+natandregion <- left_join(yearsaddnat, yearsaddbyregion, by="Year_Started")
+allyears <- left_join(natandregion, yearsaddstate, by="Year_Started")
+
+allyears %>% 
+  filter(Year_Started!="Prior to 2016") %>% 
+  filter(Year_Started!="Unknown") %>% 
+  filter(Year_Started!="Fall 2018") %>% 
+  mutate(Year_Started = as.numeric(Year_Started)) -> allyears
+
+```
+
+
+```{r}
+allyears$percentchange_nat <- na.approx(allyears$percentchange_nat, rule = 2)
+allyears$percentchange_region <- na.approx(allyears$percentchange_region, rule = 2)
+allyears$percentchange_state <- na.approx(allyears$percentchange_state, rule = 2)
+
+
+allyears %>% 
+  filter(Year_Started>1990) %>% 
+  ggplot(aes(x=Year_Started, group=1)) +
+    geom_line(aes(y=percentchange_nat), color="black", na.rm = TRUE) +
+    geom_line(aes(y=percentchange_region), color="red", na.rm = TRUE) +
+    geom_line(aes(y=percentchange_state), color="green", na.rm = TRUE) +
+    theme_bw() +
+    xlab("Year") +
+    ylab("Percent Growth of Promise Programs")
+```
+
+more than 100 programs nationally where year started is unknown
+
+
+The following code creates radial plots using ggradar:
+
+```{r}
+library(ggradar)
+```
+
+
+```{r}
+radalplotsems <- function(state) {
+  cpdata %>% 
+    filter(State==state) %>% 
+    rename(sems_covered = Semesters_or_Credits_Covered) %>% 
+    filter(sems_covered!= "Not specified") %>% 
+    mutate(sems_covered = as.numeric(gsub("\\D", "", sems_covered))) %>% 
+    select(Program_Name, sems_covered) %>% 
+    mutate(percent_covered = sems_covered/8) %>% 
+    select(Program_Name, percent_covered) %>% 
+    pivot_wider(names_from=Program_Name, values_from=percent_covered) %>% 
+    ggradar(axis.label.size = 2, group.point.size = 2) -> plt
+  
+  plt <- plt + 
+  labs(title = "Radar plot of Semesters Covered by Program") + 
+  theme(
+      plot.background = element_rect(fill = "#fbf9f4", color = "#fbf9f4"),
+      panel.background = element_rect(fill = "#fbf9f4", color = "#fbf9f4"),
+      plot.title = element_text(
+        size = 13,
+        face = "bold"
+      )
+  )
+  
+  plt
+}
+
+radalplotsems("Arizona")
+```
+
+
+
+
+```{r}
+radalplotfirstlastdollar <- function(state1, state2, state3, state4, state5, state6) {
+  
+  cpdata %>% 
+    filter(State==state1) %>% 
+    nrow() -> numstate
+    
+  cpdata %>% 
+    filter(State==state1 | State==state2 | State==state3 | State==state4 |
+            State==state5 | State==state6) %>% 
+    nrow() -> numregion
+  
+  cpdata %>% 
+    filter(State==state1) %>% 
+    group_by(Last_Dollar_First_Dollar) %>% 
+    summarize(count = n()) %>% 
+    mutate(percenttype_state = count/numstate) %>% 
+    select(Last_Dollar_First_Dollar, percenttype_state) %>% 
+    mutate(percenttype_state = round(percenttype_state, 2)) -> state
+  
+  cpdata %>% 
+    filter(State==state1 | State==state2 | State==state3 | State==state4 |
+            State==state5 | State==state6) %>% 
+    group_by(Last_Dollar_First_Dollar) %>% 
+    summarize(count = n()) %>% 
+    mutate(percenttype_region = count/numregion) %>% 
+    select(Last_Dollar_First_Dollar, percenttype_region) %>% 
+    mutate(percenttype_region = round(percenttype_region, 2)) -> region
+  
+  cpdata %>% 
+    group_by(Last_Dollar_First_Dollar) %>% 
+    summarize(count = n()) %>% 
+    mutate(percenttype_nat = count/nrow(cpdata)) %>% 
+    select(Last_Dollar_First_Dollar, percenttype_nat) %>% 
+    mutate(percenttype_nat = round(percenttype_nat, 2)) -> nat
+  
+  natregion <- left_join(nat, region, by="Last_Dollar_First_Dollar")
+  alltypes <- left_join(natregion, state, by="Last_Dollar_First_Dollar")
+  
+  alltypes %>% 
+    filter(Last_Dollar_First_Dollar!="Not Applicable") %>% 
+    filter(Last_Dollar_First_Dollar!="Unknown") -> alltypes
+  
+  alltypes <- t(alltypes)
+  alltypes <- as.data.frame(alltypes)
+  
+  colnames(alltypes) <- as.character(unlist(alltypes[1, ]))
+  alltypes <- alltypes[-1, ]
+  
+  alltypes[is.na(alltypes)] <- 0
+  
+  alltypes[] <- lapply(alltypes, as.numeric)
+  
+  region <- rownames(alltypes)
+  alltypes$region <- region
+  rownames(alltypes) <- NULL
+  
+  alltypes <- alltypes[, c("region", setdiff(names(alltypes), "region"))]
+  
+  alltypes <- alltypes %>%
+  mutate(region = case_when(
+    region == "percenttype_state" ~ "State",
+    region == "percenttype_region" ~ "SW region",
+    region == "percenttype_nat" ~ "National"
+  ))
+  
+  print(alltypes)
+  
+  
+  plt <- ggradar(alltypes, axis.label.size = 3, group.point.size = 3)
+  
+  plt <- plt + 
+  labs(title = "Radar plot of Program Type Distribution by State, Region, County") + 
+  theme(
+      plot.background = element_rect(fill = "#fbf9f4", color = "#fbf9f4"),
+      panel.background = element_rect(fill = "#fbf9f4", color = "#fbf9f4"),
+      plot.title = element_text(
+        size = 10,
+        face = "bold"
+      )
+  )
+  
+  plt
+}
+
+radalplotfirstlastdollar("Arizona", "California", "Utah", "Colorado", "New Mexico", "Texas")
+```
+
+
+```{r}
+# get number of last dollar plus in AZ vs SW region
+
+cpdata %>% 
+    filter(State=="Arizona" | State=="California" | State=="Utah" | State=="Colorado" |
+            State=="New Mexico" | State=="Texas") %>% 
+    group_by(Last_Dollar_First_Dollar) %>% 
+    summarize(count = n())
+```
+
